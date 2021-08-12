@@ -279,4 +279,7 @@ gradle-app.setting
 ### Gradle Patch ###
 **/build/
 
+### Vmware ###
+**/Vmware/**
+
 # End of https://www.toptal.com/developers/gitignore/api/macos,windows,intellij+all,eclipse,netbeans,java,gradle,git
