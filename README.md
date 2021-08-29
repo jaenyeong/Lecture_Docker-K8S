@@ -391,3 +391,155 @@ Dockerfile 명령어
 * `VOLUME` : 볼륨 마운트
 * `STOPSIGNAL` : 시스템 콜 시그널 설정
 * `SHELL` : 컨테이너에서 사용할 기본 쉘 설정
+
+## Chapter05
+도커 레지스트리
+* 도커의 이미지 저장소
+* Building, Running, Shipping(Sharing)
+* 공유 레지스트리 종류
+  * 도커 허브 (default)
+  * 로컬 레지스트리 (사용자가 직접 구축)
+  * 컨테이너 레지스트리 (클라우드 사업자가 제공)
+* 레지스트리를 사용하는 이유
+  * 보안 (IAM)
+    * 이미지 자체 암호화가 필요
+    * 접근 권한 통제
+  * 배포 파이프라인 효율화
+    * CI/CD
+
+도커 허브
+* 기본적으로 참조하는 레지스트리
+* [도커허브](https://hub.docker.com/) 계정, 저장소 생성
+  * 무료 계정 제약 사항
+    * 하나의 저장소만 Private 설정 가능
+    * `Automated Builds` 기능 사용 못함
+      * `push`한 소스를 기반으로 이미지를 빌드해주는 기능
+* 샘플 코드 복사
+  ~~~
+  $ mkdir /<프로젝트명>
+  $ cd /<프로젝트명>
+  $ git clone https://github.com/jaenyeong/Sample_Docker-portfolio.git
+  ~~~
+  * 이미지 빌드
+    ~~~
+    $ sudo docker build -t <계정명>/<저장소명>:[태그명] .
+    $ sudo docker build -t jaenyeongdev/portfolio:1.0 .
+    ~~~
+    * ~~~
+      # alpine은 경량화 리눅스 배포판 입니다.
+      # 도커 베이스 이미지로 alpine 리눅스를 활용하는 이유는
+      # 이미지 용량을 적게 차지할 뿐만 아니라 처리속도가 빠르기 때문
+      FROM nginx:alpine
+    
+      # 이 경로는 nginx 웹서버의 index.html 파일이 위치한 곳
+      # 브라우저를 통해 웹서버로 접근했을 때 로드되는 페이지가 바로 이 곳을 참조하여 렌더링
+      WORKDIR /usr/share/nginx/html
+    
+      # 클론한 소스를 이미지에 복사하기 위해 기존 이미지 내의 파일을 전부 삭제
+      RUN rm -rf ./*
+    
+      # Dockerfile이 위치한 경로의 html, css, js 등의 파일을 이미지 내로 복사
+      COPY ./* ./
+    
+      # nginx 웹서버 기동
+      ENTRYPOINT ["nginx", "-g", "daemon off;"]
+      ~~~
+* 도커 허브에 이미지 공유 시엔 빌드할 때 반드시 명명규칙 준수할 것
+  * `<계정명>:<저장소명>`
+* 도커 허브 로그인
+  * `$ sudo docker login`
+* 도커 허브 이미지 공유
+  ~~~
+  $ sudo docker <계정명>/<저장소명>:[태그명]
+  $ sudo docker push jaenyeongdev/portfoilo:1.0
+  ~~~
+
+로컬 레지스트리
+* 이미지가 저장되는 레지스트리를 컨테이너 상에 구축할 수 있음
+* 도커에서 `Registry`라는 이름으로 제공
+* `Registry` 컨테이너 실행
+  ~~~
+  # --restart always는 도커 엔진이 재시작 될 때 자동으로 컨테이너를 재시작하도록 하는 옵션
+  $ sudo docker run -d -p 5000:5000 --restart always --name registry registry:2
+  ~~~
+* 이미지 태깅
+  ~~~
+  $ sudo docker tag <기존 이미지명>:[태그명] <레지스트리 컨테이너 IP>/<이미지명>:[태그명]
+  $ sudo docker tag jaenyeongdev/portfoilo:1.0 localhost:5000/portfolio:1.0
+  ~~~
+* 컨테이너에 구축한 레지스트리에 이미지를 공유하는 경우 반드시 명명규칙 준수할 것
+  * `<컨테이너 IP>:<포트>/<이미지명>`
+  * 컨테이너를 실행할 때 `5000`으로 지정한 포트를 구성상 변경이 필요한 경우 태그 설정에도 반영 필요
+* 이미지 공유
+  * `$ sudo docker push localhost:5000/portfolio:1.0`
+
+GCP Artifact Registry
+* 패키지와 도커 컨테이너 이미지를 저장, 관리
+  * CI/CD
+    * `Cloud Build`의 아티팩트 저장, `Google Cloud` 런타임에 배포
+  * 공급망
+  * VPN 서비스 제어 (보안)
+  * 단일 프로젝트 내 여러 저장소 생성 가능
+* GCP 콘솔 > 프로젝트 생성
+  * GCP에서는 프로젝트 단위로 앱을 관리
+    * `Firebase` 등의 서비스도 GCP에서 관리되는 요소 중 하나
+* 결제 계정 생성
+* 서비스 사용 등록
+  * `API 및 서비스 - 라이브러리` 메뉴 참조
+    * `Artifact Registry`, `Cloud Build` 서비스 사용 선택
+* GCP 저장소 생성
+  * `Artifact Registry` 콘솔에서 `저장소 만들기` 선택
+  * 저장소 설정
+    * 형식 `Docker`
+    * 리전 `asia-northeast3(서울)`
+  * 암호화 `Google 관리 암호화` 선택
+* 리눅스 도커 보안 그룹 설정
+  * `$ sudo usermod -a -G docker [계정명]`
+* google cloud SDK 패키지 경로 추가
+  * `$ echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list`
+* google cloud SDK 공개키 내려받기
+  * `$ curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -`
+* google cloud SDK 설치
+  * `$ sudo apt-get update && sudo apt-get install google-cloud-sdk`
+* google cloud SDK 초기화
+  * `gcloud init`
+  * 위 명령 실행 후 google 계정에 로그인 링크 > 링크에 접속, 인증코드를 복사 > 프롬프트에 붙여넣기
+* GCP Registry 저장소 인증
+  * `$ sudo gcloud auth configure-docker asia-northeast3-docker.pkg.dev`
+  * 해당 명령은 루트 권한이 필요, 반드시 `sudo` 명령 같이 사용
+  * 실행 후 `/home/<usename>/docker/config.json` 파일과 함께 저장소 경로가 등록 됨
+* 이미지 태깅
+  ~~~
+  # sudo docker tag jaenyeongdev/portfolio:1.0 asia-northeast3-docker.pkg.dev/[프로젝트ID]/[저장소명]/portfolio
+  $ sudo docker tag jaenyeongdev/portfolio:1.0 asia-northeast3-docker.pkg.dev/jaenyeong-docker-registry/portfolio/portfolio
+  ~~~
+  * GCP의 레지스트리에도 이미지를 업로드 할 때 반드시 이미지명 명명규칙 준수
+* 이미지 공유
+  ~~~
+  # sudo docker push asia-northeast3-docker.pkg.dev/[프로젝트ID]/[저장소명]/portfolio
+  $ sudo docker push asia-northeast3-docker.pkg.dev/jaenyeong-docker-registry/portfolio/portfolio
+  ~~~
+
+GCP Cloud Build
+* GCP에서 제공되는 도커 이미지 자동 빌드 기능
+  * `Github`, `Bitbucket`의 `push` 된 소스를 기반으로 도커 이미지를 자동으로 빌드
+* 트리거 생성, 저장소 연결
+  * 'Cloud Build' 메뉴에서 '트리거'를 누른 후 저장소 `연결` 버튼 선택
+  * `Github` 선택 후 로그인
+  * 계정 연동 여부 창 > `Authorize Google Cloud Build` 선택
+  * `push` 내역을 가져오기 위해 `Google Cloud Build 설치` 선택
+  * 설치 대상 계정 선택
+  * `Google Cloud Build` 적용
+    * 계정에 생성된 저장소 전체에 적용
+      * `All repositories` 선택 후 `Install` 선택
+    * 특정 저장소만 적용
+      * `Only Select repositories` 선택 후 `Install` 선택
+  * GCP `Cloud Build` 기능을 적용할 저장소를 선택, `확인` 버튼 선택
+  * 전송, 트리거 설명 체크박스에 체크
+* 트리거 설정
+  * 이벤트 > `브랜치로 푸시` 선택
+  * 구성 > `Dockerfile` 선택
+* 서비스 계정 권한 사용 설정
+  * `Cloud Build` 설정의 서비스 계정 탭 > 표시된 두 항목을 '사용 설정됨' 상태로 변경
+* `Github`에 소스 `push` 후 빌드 확인
+  * 빌드와 관련한 성공/실패 로그는 GCP 대시보드에서 확인 가능
