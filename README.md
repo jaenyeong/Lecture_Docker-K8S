@@ -27,6 +27,14 @@ Ubuntu - Bionic Beaver 18.04.5(LTS)
 
 SSH(Secure Shell) 접속 (22 포트)
 * 접속 `sudo ssh jaenyeong@172.16.248.2`
+* ssh config 설정
+  * 편집기, 에디터 등으로 `~/.ssh/config` 실행, `HOSTNAME` 설정
+    ~~~
+    ## Docker&KBS
+    Host docker_vm
+    HostName 172.16.248.2
+    user jaenyeong
+    ~~~
 
 Docker - Docker Engine on Ubuntu 20.10.8 (community)
 * [설치](https://docs.docker.com/engine/install/ubuntu/)
