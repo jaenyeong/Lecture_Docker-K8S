@@ -24,7 +24,7 @@ $ nano Dockerfile
 실습 중 `apt-get update` 에러 발생
 * DNS 등 네트워크연결이 원활하지 않아 발생한 것으로 보임
 * VMware Fusion 재부팅 후 다시 실행
-    * DNS 설정보다 먼저 확인해 볼 것
+  * DNS 설정보다 먼저 확인해 볼 것
 * 에러 메시지
   ~~~
   jaenyeong@ubuntu_server:~/docker$ cat Dockerfile
