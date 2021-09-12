@@ -364,6 +364,7 @@ Dockerfile 명령어
       * `CMD ["/bin/echo", "Hello World!"]`
     * 일반적으로 `Exec` 형식 사용을 권장
   * 차이
+    * 가장 큰 차이는 명령어 인수의 처리 유무
     * `ENTRYPOINT` 명령은 사용자가 어떤 인수를 명령으로 넘기더라도 `Dockerfile`에 명시된 명령을 그대로 실행
     * `CMD` 명령은 컨테이너를 실행할 때 사용자가 인수를 넘기면 기존에 작성된 내용을 덮어씀
   * 함께 사용하는 경우
@@ -565,3 +566,188 @@ GCP Cloud Build
   * `Cloud Build` 설정의 서비스 계정 탭 > 표시된 두 항목을 '사용 설정됨' 상태로 변경
 * `Github`에 소스 `push` 후 빌드 확인
   * 빌드와 관련한 성공/실패 로그는 GCP 대시보드에서 확인 가능
+
+## Chapter06
+도커 네트워크/볼륨
+* 네트워크
+  * 복수의 디바이스가 연결되어 있는 것
+* 프로토콜
+  * 연결된 디바이스 간 데이터를 주고 받는 규칙
+
+`$ ifconfig`
+* `$ ifconfig # Linux/macOS`
+* `$ ipconfig # Windows`
+![ifconfig](./chapter_06/ifconfig.png)
+* `ens33`
+  * 디바이스의 `NIC(Network Interface Controller)`를 나타내는 부분
+  * 일반적으로 `NIC`는 `LAN 카드`라고 불리며 호스트와 네트워크 통신망 사이에서 데이터 송수신 역할
+    * 일반 PC에는 물리 `NIC`가 내장
+  * 사양 페이지에 `Ethernet` 관련 포트가 유선으로 외부 통신망과 호스트 디바이스를 연결해주는 매개체
+  * 구버전 리눅스에는 `eth0`, `eth1`
+* `lo`
+  * `localhost` (`Loopback Network Interface`에서 비롯된 용어)
+    * 디바이스가 자기 자신을 가리키는 것
+    * 웹 서버를 구동한 `PC` 브라우저에서 접속, 테스트가 가능한 것이 `Loopback` 네트워크 덕분
+  * `OS`에는 내부적으로 `HostName`, `IP`를 매핑(설정)해둔 파일이 존재
+    * 우분투, 맥 등은 `/etc/hosts`
+* `inet`, `inet6`
+  * `inet`
+    * `IPv4`를 의미
+    * 12자리, 32비트로 구성되어 있으며, 10진수로 4옥텟으로 분할 표기
+  * `inet6`
+    * `IPv6`를 의미 (`IPv4` 대체용)
+    * 128비트로 구성되어 있으며, 16진수로 8옥텟으로 분할 표기
+    * `0` 값을 가지는 경우 생략 가능 (실제 조회되는 주소값은 `8` 옥텟보다 적을 수 있음)
+  * `Private IP` (사설 `IP`)
+    * 모든 디바이스가 `Public IP` (공인 `IP`)가 필요하지는 않음
+    * 하나의 공인 `IP`로 다수의 디바이스가 통신망에 접근 가능
+    * 라우터로 묶인 네트워크 통신망을 `LAN(Local Area Network)`이라 함
+    * `LAN`이 모여 `WAN(Wide Area Network)` 구성
+* `port`
+  * 해당 `IP` 주소의 입구라고 봐도 무방
+  * `IANA(Internet Assigned Numbers Authority)` 인터넷 할당 번호 관리 기관
+    * `FTP` : 20,21
+    * `SSH` : 22
+    * `TELNET` : 23
+    * `SMTP` : 25
+    * `DNS` : 53
+    * `POP3` : 110
+    * `HTTP` : 80
+    * `HTTPS` : 443
+
+호스트-컨테이너 네트워크
+* `NIC(Network Interface Controller)`
+  * 일반적으로 `LAN 카드`라고 불림
+  * 호스트와 네트워크 간 데이터를 송수신하는 인터페이스
+  * 물리적으로 구성된 `NIC`는 `ens33`으로 인식
+    * 구버전 리눅스 배포판에서는 `eth0`으로 인식되어 있으나 물리적인 `NIC`라고 봐도 무방
+* `NAPT(Network Address Port translation`
+  * `IP`, `Port`를 변환하는 기술
+  * 도커 엔진이 컨테이너에 부여한 `IP`는 사설이기 때문에 호스트에서 직접 접근 불가
+  * 접근을 가능하게 하기 위해 호스트의 각 `Port`에 컨테이너의 `IP`, `Port`를 매핑
+* `docker0`(Virtual bridge)
+  * `bridge` 형태의 네트워크로 도커 엔진 실행 시 자동 생성
+  * 컨테이너가 실행되면 내부의 모든 포트를 `docker0`에 개방
+  * 호스트는 `NIC`에서 직접 컨테이너와 연결하는 것이 아니라 `docker0`를 경유
+  * 포트를 통해 컨테이너에 접근할 수 있도록하는 다리 역할
+* `veth` + 난수
+  * 컨테이너가 호스트와 통신하기 위한 가상의 `NIC`
+  * `veth + 난수` 형태로 생성
+  * 컨테이너 측면에서는 가상 `NIC`(`veth+난수`)를 `eth0`라고 인식
+
+도커 네트워크
+* `bridge`
+  * `docker0`를 `Gateway`로 컨테이너가 생성된 순서대로 `IP` 부여
+    * `Gateway`는 네트워크에 접근하기 위한 출입구
+    * 서로 다른 네트워크에 접근을 하기 위해서는 `Gateway` 주소가 필요, 기본적으로 `IP` 마지막 자리를 `1`로 설정
+  * 별도의 설정이 없다면 모든 컨테이너는 구동 시 `docker0`에 연결
+    * 이를 통해 컨테이너 간 통신도 가능하게 됨
+    * 별도의 `bridge`를 구축, 컨테이너를 연결한다면 `docker0`에 연결된 컨테이너와는 통신이 불가능
+  ~~~
+  $ sudo docker container run -d -p 80:80 --name webserver1 httpd
+  $ sudo docker container run -d -p 8080:80 --name webserver2 httpd
+  $ sudo docker container run -d -p 8081:80 --name webserver3 httpd
+
+  $ sudo docker container inspect --format="{{ .NetworkSettings IPAddress }}" webserver1 webserver2 webserver3
+  ~~~
+* `host`
+  * `host` 네트워크는 도커 엔진이 작동하고 있는 `Host`의 `IP` 주소를 그대로 사용하는 것
+  * `bridge`를 통해 `NAPT` 과정을 거치지 않아도 됨
+    * 명시적으로 컨테이너의 포트를 명령에 작성하지 않아도 됨
+  * 격리된 네트워크로 구성하지 않고, 도커 엔진과 한 공간에 두는 것
+  * `Host` OS가 리눅스인 경우만 지원 (도커 테스크탑 형태는 지원하지 않음)
+  ~~~
+  $ sudo docker container run -it --network host --name ubuntu-host ubuntu:18.04
+
+  root@ubuntu_server:/# apt-get update
+  root@ubuntu_server:/# apt-get install net-tools
+  ~~~
+* `none`
+  * 컨테이너를 격리된 공간에 차단, 어떤 네트워크와도 연결하지 못하게 하는 것
+  ~~~
+  $ sudo docker container run -it --network none --name ubuntu-none ubuntu:18.04
+  
+  # 네트워크 단절로 실패
+  root@307b5c4db442:/# apt-get update
+  ~~~
+
+도커 네트워크 명령어
+* 기본적으로 생성되는 네트워크 확인
+* `ls` : 네트워크 목록 조회
+  * 옵션
+    * `--filter`
+      * 조회 필터 설정
+      ~~~
+      $ sudo docker network ls
+      $ sudo docker network ls --filter driver=bridge
+      ~~~
+      * `name`, `scope` 등도 조건으로 설정 가능
+* `create` : 네트워크 생성
+  * 옵션
+    * `--driver`
+      * 네트워크 종류 선택 (기본 값은 `bridge`)
+      ~~~
+      $ sudo docker network create --driver=bridge new-bridge
+      ~~~
+      * 일반적으로 명령어를 통한 생성 보다는 `docker-compose.yaml` 내에 세팅
+* `connect` : 컨테이너를 네트워크에 연결
+  ~~~
+  $ sudo docker network connect new-bridge webserver1
+
+  # 연결 상태 확인
+  $ sudo docker container inspect webserver1
+  ~~~
+  * 하나의 컨테이너가 두 개의 네트워크에 각각 공유
+    * 기존에 디폴트로 연결되어 있는 `bridge` 네트워크는 유지
+    * 새롭게 `new-bridge`와 추가 연결
+  * 두 네트워크 끼리는 다른 게이트웨이로, 통신 불가능
+  * 컨테이너는 두 대역 모두 통신 가능
+  ~~~
+  $ sudo docker container run -d -p 8082:80 --name=webserver4 --net=new-bridge httpd
+  $ sudo docker container inspect webserver4
+  ~~~
+  * `--net` 옵션을 추가하여 컨테이너를 생성하면 디폴트 네트워크 설정(`bridge`)을 연결하지 않고 명령어 값인 `new-bridge`만 연결
+* `disconnect` : 컨테이너를 네트워크에서 해제
+  * `$ sudo docker network disconnect new-bridge webserver1`
+* `inspect` : 네트워크 상세 정보 조회
+  * `$ sudo docker network inspect new-bridge`
+* `rm` : 네트워크 삭제
+  * `$ sudo docker network rm new-bridge`
+
+도커 볼륨
+* 도커에서는 `Volume`과 `Bind Mount`라는 개념으로 `Host`의 일부 영역을 할당해 스토리지로 지원
+* `Bind Mount`
+  * 초기 도커에서 사용된 스토리지 기능
+  * `Host` 경로 일부를 설정해 컨테이너에 마운트하는 기능을 가리킴
+  * `/Desktop` 경로를 USB 삼아 컨테이너와 연결하는 것과 유사
+  * 컨테이너 실행 시 `-v` 옵션 사용
+  ~~~
+  $ sudo mkdir /home/ubuntu/bindmount-test
+  $ sudo cd /home/ubuntu/bindmount-test
+  $ sudo touch bindmount.txt
+  $ sudo echo "bind-mount" > bindmount.txt
+
+  $ sudo docker container run -d -it --name bindmount -v /home/ubuntu/bindmount-test:/bindmount-test ubuntu:18.04
+  $ sudo docker container run -v [호스트 경로]:[컨테이너 경로] [이미지명:태그]
+  ~~~
+* `Volume`
+  * `Bind Mount` 이후에 나온 개념
+  * 호스트의 경로를 임의로 지정할 수 없음
+  * 대신 도커 엔진에서 관리하는 `/var/lib/docker/volumes/<볼륨명>`으로 세팅
+  * 컨테이너를 실행하는 단계에서 생성 가능
+    * 볼륨만 개별적으로 생성 가능
+  ~~~
+  $ sudo docker container run -d -it --name volume -v volume1:/volume-test ubuntu:18.04
+  $ sudo docker container attach volume
+
+  root@53b1ffc4f0e8:/# echo "volume" > ./volume-test/volume.txt
+  $ exit
+
+  $ cd /var/lib/docker/volumes/volume1/_data
+  $ cat volume.txt
+  ~~~
+  * 지정 볼륨명인 `volume1` 디렉토리 생성 됨
+  * 볼륨을 통해 저장된 데이터는 `var/lib/docker/volumes/volume1/_data`에 저장
+    * 컨테이너에서 입력한 문자열 텍스트 파일이 호스트에도 동일한 내용으로 조회 가능
+    * `$ sudo docker volume create volume2`
+
