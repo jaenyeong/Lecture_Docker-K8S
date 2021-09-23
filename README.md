@@ -751,3 +751,323 @@ GCP Cloud Build
     * 컨테이너에서 입력한 문자열 텍스트 파일이 호스트에도 동일한 내용으로 조회 가능
     * `$ sudo docker volume create volume2`
 
+## Chapter07
+도커 컴포즈
+* 멀티 컨테이너를 구성하는 컴포넌트 (`Compose` 뜻은 구성하다)
+  * 여러 컨테이너를 정의, 실행
+  * `docker-compose.yml` 파일로 설정
+
+사용법
+* 사용하기 위해선 별도의 설치 필요 (도커 데스크탑에는 내장되어 있음)
+  * `$ sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose`
+* 실행 권한 부여
+  * `$ sudo chmod +x /usr/local/bin/docker-compose`
+* 버전 확인
+  * `$ docker-compose --version`
+
+`YAML` 또는 `YML`
+* `YAML` 또는 `YML` 파일은 `Ain't Markup Language`의 약자
+  * 원래 `Yet Another Markup Language`였으나 후에 변경됨
+* 시스템 간 데이터 교환 목적, `key-value` 구조
+* 문법
+  * 대소문자 구분
+  * 들여쓰기 시 탭이 아닌 스페이스로 구분
+  * 값으로 `String`, `Number`, `Boolean` 모두 사용 가능
+  * `:` 바로 뒤에는 한 칸 떼고 작성
+  * 값 나열 시 `-` 입력 후 한 칸 떼고 작성
+  * 주석은 `#` 사용
+  
+`docker-compose.yml` 구조 예시
+* Nextcloud 와 관계형 DB postgresql 컨테이너 구성 설정
+  ~~~yaml
+  version: "3.9"
+  services:
+    db:
+      image: postgres:alpine
+      environment:
+        - POSTGRES_PASSWORD=nextcloud
+        - POSTGRES_DB=nextcloud
+        - POSTGRES_USER=nextcloud
+      restart: always
+      volumes:
+        - db_data:/var/lib/postgresql/data
+
+    nc:
+      image: nextcloud:apache
+      environment:
+        - POSTGRES_HOST=db
+        - POSTGRES_PASSWORD=nextcloud
+        - POSTGRES_DB=nextcloud
+        - POSTGRES_USER=nextcloud
+      ports:
+        - "80:80"
+      restart: always
+      volumes:
+        - nc_data:/var/www/html
+      depends_on:
+        - db
+  volumes:
+    nc_data:
+    db_data:
+  ~~~
+* 컨테이너 구동 후 브라우저 접속
+  * 관리자 계정 설정 창에서 값 입력 후 `Finish setup` 버튼 클릭
+* 계정 생성이 완료, 필요한 모듈이 설치되면 컨테이너를 구글 드라이브처럼 사용 가능
+
+도커 컴포즈 명령어
+* 명령어는 기본적으로 `docker-compose.yml` 파일이 위치한 경로에서 실행
+* `up` : 멀티 컨테이너 생성, 실행
+  * `$ sudo docker-compose up`
+  * 컨테이너명은 별도로 설정하지 않으면 `[docker-compose.yml 파일이 위치한 디렉터리명]_[서비스명]_[번호]`
+  * 옵션
+    * `-d`, `--detach`
+      * 컨테이너를 백그라운드에서 실행
+    * `--build`
+      * 컨테이너 생성 전 이미지 빌드
+    * `--no-build`
+      * 실행 대상 이미지가 없더라도 빌드하지 않음
+    * `--abort-on-container-exit`
+      * 여러 컨테이너 중 하나라도 종료되면 모두 종료
+      * `--detach`와 함께 사용할 수 없음
+* `ps` : 컨테이너 조회
+  * `$ sudo docker-compose ps`
+  * `docker ps` 또는 `docker container ls` 조회들과 출력 양식 차이가 약간 존재
+  * 옵션
+    * `-q`, `--quiet`
+      * 컨테이너 `ID`만 출력
+    * `--services`
+      * 정의된 서비스명 출력
+    * `-a`, `--all`
+      * 종료된 컨테이너를 포함한 모든 컨테이너 출력
+* `run` : 컨테이너 내부에서 명령 실행
+  * `$ sudo docker-compose run [서비스명] [실행 대상 명령]`
+    * `$ sudo docker-compose run db bash`
+  * `run` 명령 실행 인수를 컨테이너명이 아닌 `docker-compose.yml`에 정의된 서비스명으로 입력해야 함
+* `start` : 생성되어 있는 컨테이너 실행
+  * `$ sudo docker-compose start`
+* `stop` : 생성되어 있는 컨테이너 종료
+  * `$ sudo docker-compose stop`
+* `down` : 컨테이너 종료 및 삭제
+  * `$ sudo docker-compose down`
+
+`docker-compose.yml` 작성
+* `version`
+  ~~~yaml
+  version: "3.9"
+  ~~~
+  * 최상단에 버전을 정의 (도커 엔진 버전과 호환성 확인)
+* `services`
+  ~~~yaml
+  services:
+    db:
+      ...
+    nc:
+      ...
+  ~~~
+  * 서비스는 컴포즈에서 실행할 컨테이너
+  * 각 서비스별로 컨테이너 구성을 위해 내부에 다양한 옵션을 추가
+* `container_name`
+  * 컨테이너명 설정
+  * 서비스명과 컨테이너명은 다른 개념
+* `image`
+  ~~~yaml
+  services:
+    db:
+      image: postgres:alpine
+      ...
+    nc:
+      image: nextcloud:apache
+      ...
+  ~~~
+  * 컨테이너로 실행할 이미지 설정
+    * `Dockerfile`에 `FROM`과 같은 설정
+* `build`
+  ~~~yaml
+  services:
+    db:
+      ...
+    nc:
+      build:
+        context: .
+        dockerfile: Dockerfile
+      ...
+  ~~~
+  * 이미지를 빌드하여 바로 사용
+    * `dockerfile` 옵션 사용 시 파일명이 `Dockerfile`이 아닌 것도 빌드 대상으로 지정 가능
+      * 동일 경로가 아닌 다른 경로 지정 가능
+* `command`
+  ~~~yaml
+  services:
+    db:
+      ...
+    nc:
+      build:
+        context: .
+        dockerfile: Dockerfile
+      command: java -jar app.jar
+  ~~~
+  * 생성된 컨테이너에 어떤 명령을 내릴지 세팅
+  * 일반적으로 컴파일러나 특정 언어로 작성된 앱을 명령어로 실행해야 하는 경우에 사용
+* `ports`
+  ~~~yaml
+  services:
+    db:
+      ...
+    nc:
+      ports: "80:80"
+      ...
+  ~~~
+  * 포트포워딩 설정 (`docker run -p 80:80`와 동일)
+    * `yaml` 파일에서는 따옴표를 사용을 권고
+      * `XX:YY`는 형식이 시간값으로 해석될 수 있어 `"XX:YY"`로 사용
+* `depends_on`
+  ~~~yaml
+  services:
+    db:
+      ...
+    nc:
+      depends_on:
+        - db
+      ...
+  ~~~
+  * 특정 서비스 시작 시 이어서 시작할 수 있도록 설정
+    * `nc` 서비스가 `db` 서비스를 의존 (`db` > `nc` 순서로 실행)
+    * 다만 `db` 서비스가 완전히 초기화 된 리스닝 상태인지 확인하지 않음
+    * 단순히 의존하는 서비스의 시작 여부를 보고 서비스 시작 여부 판단
+* `environment`
+  ~~~yaml
+  services:
+    db:
+      ...
+    nc:
+      environment:
+        - POSTGRES_HOST=db
+        - POSTGRES_PASSWORD=nextcloud
+        - POSTGRES_DB=nextcloud
+        - POSTGRES_USER=nextcloud
+      ...
+  ~~~
+  * 환경 변수 설정
+    * 컨테이너 내부에서 사용할 환경 변수 선언
+    * 일반적으로 데이터베이스 설정에 주로 사용
+    * 그 외 필요한 각 컨테이너별 환경 변수 할당 (`docker run -e`와 유사)
+* `volumes`
+  ~~~yaml
+  services:
+    db:
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ...
+    nc:
+      volumes:
+        - nc_data:/var/www/html
+    ...
+  volumes:
+    nc_data:
+    db_data:
+  ...
+  ~~~
+  * 볼륨 세팅 (`docker run -v`와 유사)
+  * 컨테이너 삭제 시에도 데이터 유실되지 않게 호스트의 일부 영역을 할당
+    * `[볼륨명]:[할당할 호스트 경로]` 작성
+    * 그리고 `services`와 같은 레이어에 `volumes` 작성 후 설정한 볼륨명 작성
+* `restart`
+  ~~~yaml
+  services:
+    db:
+      ...
+    nc:
+      ...
+      restart: always
+    ...
+  ~~~
+  * 서비스 재시작 설정 (기본값은 하지 않음)
+    * 옵션
+      * `no` (default)
+        * 안함
+      * `always`
+        * 항상
+      * `on-failure`
+        * 구동 실패 시
+      * `unless-stopped`
+        * 사용자가 중지를 하는 경우를 제외한 모든 경우
+    * 일반적으로 웹 서비스는 재시작을 `always`로 설정하는 경우가 많음
+      * `db`가 리스닝 상태가 되기 전 웹 서비스가 커넥션을 생성하면 에러 발생 (비정상 종료)
+* `expose`
+  ~~~yaml
+  services:
+    db:
+      ...
+    expose:
+      - 5432
+      ...
+    nc:
+      ...
+  ~~~
+  * 포트 설정은 `Dockerfile`의 `EXPOSE`와 유사하지만 조금 다름
+  * 지정된 포트를 통해 통신을 가능하게 설정하나 호스트 `OS`에서는 접근 불가능
+    * 연결된 다른 컨테이너(서비스)와 통신만 가능함
+      * 다른 서비스는 `docker-compose.yml` 파일에 작성된 `services` 하위 항목을 의미
+    * 동일 네트워크 대역에 위치하므로 기본적으로 통신이 가능
+
+샘플 예제
+* 구성
+  * `NextCloud` + `PostgreSQL`
+* 디렉터리 생성, 이동
+  * `$ mkdir sample && cd sample`
+* 도커 컴포즈 파일 생성
+  * `$ nano docker-compose.yaml`
+  * 내용은 위에 도커 컴포즈 파일 설정 붙여넣기
+    ~~~yaml
+    version: "3.9"
+    services:
+      db:
+        image: postgres:alpine
+        environment:
+          - POSTGRES_PASSWORD=nextcloud
+          - POSTGRES_DB=nextcloud
+          - POSTGRES_USER=nextcloud
+        restart: always
+        volumes:
+          - db_data:/var/lib/postgresql/data
+  
+      nc:
+        image: nextcloud:apache
+        environment:
+          - POSTGRES_HOST=db
+          - POSTGRES_PASSWORD=nextcloud
+          - POSTGRES_DB=nextcloud
+          - POSTGRES_USER=nextcloud
+        ports:
+          - "80:80"
+        restart: always
+        volumes:
+          - nc_data:/var/www/html
+        depends_on:
+          - db
+    volumes:
+      nc_data:
+      db_data:
+    ~~~
+* 도커 컴포즈 실행
+  * `$ sudo docker-compose up`
+* NextCloud 접속 확인 (구글 드라이브와 같은 기능을 제공하는 파일 관리 서비스)
+  * 브라우저에서 `http://172.16.248.2/` 접속하여 서비스 정상 유무 확인
+  * 대시보드에서 사용할 계정, 비밀번호 입력 후 접속
+    * ID : `jaenyeong`
+    * PW : `0317`
+* 새 터미널에서 VM에 연결
+  * 기존 NextCloud를 실행한 세션은 그대로 둘 것
+  * 컨테이너 확인
+    * `$ sudo docker ps`
+  * 네트워크 확인
+    * `$ sudo docker network ls`
+  * 이미지 확인
+    * `$ sudo docker image ls`
+* `sudo docker-compose up` 명령 분석
+  * 리소스 생성
+    * `sample_nc_1` NextCloud
+    * `sample_db_1` PostgreSQL
+    * `sample_default` 리소스를 연결하는 브릿지 네트워크
+* `sudo docker-compose down` 명령
+  * 위에서 생성된 리소스를 삭제
