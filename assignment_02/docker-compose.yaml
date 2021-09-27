@@ -22,6 +22,8 @@ services:
       driver: none
     volumes:
       - pgadmindata:/var/lib/pgadmin
+    ports:
+      - "5050:80"
     restart: always
 
   web:
