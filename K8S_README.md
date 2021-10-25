@@ -372,3 +372,95 @@ K8S 리소스
     * `PV` 리소스 사용
     * 클레임 명세서 내 특정 크기 및 접근 모드를 요청
       * 예시 : ReadWriteOnce, ReadOnlyMany, ReadWriteMany
+
+## Chapter04
+
+APIs and Access
+* Label
+  * 오브젝트를 식별하는데 도움이 되는 문자열 키/쌍 (쿼리 가능)
+* Annotation
+  * 단순 주석
+  * 모든 API 오브젝트는 주석 포함 가능 (쿼리 불가능)
+  * K8S의 실험적인 기능
+  * 제작사별 특이한 기능, 메타데이터로 가능하므로 그래픽 아이콘도 가능
+* 확인
+  * `$ kubectl describe pod -n kube-system calico-kube-con`
+
+API 접근
+* API 서버
+  * 중앙 접근 포인트 (Stateless)
+    * `etcd` 활용
+    * 복제 가능
+  * 주요 기능
+    * API 관리
+      * 서버에서 API를 노출하고 관리하는 프로세스
+    * 요청 처리
+      * 클라이언트의 개별 API 요청을 처리하는 기능
+      * 대부분 `HTTP` 형태로 요청, 컨텐츠는 `JSON` 기반이 많음
+      * [인가](https://kubernetes.io/ko/docs/reference/access-authn-authz/authorization/)
+    * 내부 제어 루프
+      * API 작동에 필요한 백그라운드 작업을 담당
+        * 대부분 컨트롤러 매니저에서 수행
+
+V1 Group API, API 리소스
+* API 그룹
+  * K8S API를 더 쉽게 확장하게 설계
+  * `REST` 경로와 오브젝트의 `apiVersion` 필드에 명시
+* 두 종류의 API 그룹
+  * V1 Group (Core/Legacy)
+    * `/api/v1`
+    * `apiVersion: v1`
+  * 이름있는 그룹 (후속)
+    * `/apis/$GROUP_NAME/$VERSION`
+    * `apiVersion: $GROUP_NAME/$VERSION`
+* [API 리소스 탐방](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.22/)
+* API 버전
+  * alpha
+    * 불안정, 상용 환경에 부적합
+  * beta
+    * 안정적이나 최종 개선 예정
+  * GA(General Availability)
+    * 안정적
+
+인증서
+* 다양한 인증 방법 중 대부분 `PKI(공개 키 인프라)` 기반으로 상호 인증하는 방법을 사용
+* `PKI(Public Key Infrastructure)`
+  * 대칭키
+    * 암호화와 복호화에 같은 암호키를 사용하는 알고리즘
+  * 비대칭키
+    * 공개키, 비밀키 존재
+  * 공개된 키를 개인이나 집단을 대표하는 믿을 수 있는 주체와 엮는 것이며 인증기관(CA)의 등록, 인증 발행을 통해 성립
+    * 인증기관 - `Certificate Authority`
+* K8S 컨트롤 플레인에서 자체 CA 역할을 수행
+
+RBAC(`Role Based Access Control`)
+* 인증 모듈은 4개가 존재하는데 이 중에 `RBAC`가 가장 대표적이며 효과적인 방식
+  * [RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac/)
+
+Role, Cluster Role
+* 작업 수행에 대한 권한
+  * `어떤 resource에 어떤 verb 권한을?`
+* 차이
+  * `kind`에 들어가는 종류명
+  * `namespace` 존재 여부 (범위만 다름)
+* `Cluster Role` 사용 예시
+  * 클러스터 관리자
+  * K8S 컨트롤러
+* `$ kubectl create role --help`
+  * 실습 파일에 실행한 명령 목록 작성
+
+RoleBinding, ClusterRoleBinding
+* Role을 사용자/그룹/Service Account에 연결
+  * `어떤 resource에 어떤 verb 권한을 + "누구에게 줄 것인가?"`
+* 차이
+  * `kind`에 들어가는 종류명
+  * `namespace` 존재 여부 (범위만 다름)
+* `Cluster Role` 사용 예시
+  * 클러스터 관리자
+  * K8S 컨트롤러
+* `$ kubectl create rolebinding --help`
+  * 실습 파일에 실행한 명령 목록 작성
+
+Service Account
+* 파드 내부에서 실행하는 프로세스가 K8S API를 호출할 때 활용
+  * `$ kubectl create serviceaccount test`
