@@ -464,3 +464,140 @@ RoleBinding, ClusterRoleBinding
 Service Account
 * 파드 내부에서 실행하는 프로세스가 K8S API를 호출할 때 활용
   * `$ kubectl create serviceaccount test`
+
+## Chapter05
+
+Scheduler
+* 컨테이너를 적절한 노드에 스케줄링(배치)하는 역할(전용 바이너리)
+* `nodeName`이 없는 파드가 있는지 API 서버를 지속적으로 감시
+* 해당 파드를 적합한 노드로 선택, 파드의 `nodeName` 업데이트
+* 해당 노드의 쿠블렛이 계속 API 서버를 모니터링, 자신의 것이면 실행
+
+Scheduling 프로세스
+* 스케줄러가 파드를 배치하는 주요 기준
+  * 사전 조건
+    * 파드가 특정 노드에 적합한지 확인
+    * 예시) 파드에서 요청한 메모리 양을 노드가 감당할 수 있는지, 유저가 `node selector`로 지정한 경우
+  * 우선 순위
+    * 파드가 노드에서 실행할 수 있다고 가정, 상대적 가치를 판단
+    * 예시) 이미지가 이미 존재하는 노드에 가중치를 부여 - 빠른 시작 가능, 동일한 서비스 내 파드라면 `spreading`
+* 스케줄링은 한 순간에만 최적, 이후 충돌 등 다양한 이유로 실행중인 파드를 이동할 수 있음
+  * 이 경우 해당 파드를 삭제, 재생성
+
+Policy 정책
+* 쿠버네티스 스케줄링과 다르게 운용자가 직접 스케줄링하고 싶다면 주로 아래 3가지 방안 활용
+* `Node Selector`
+  * 노드에도 파드에도 레이블을 부여하여 동일한 조건에 맞게 스케줄 되도록 설정
+  * [문서](https://kubernetes.io/ko/docs/concepts/scheduling-eviction/assign-pod-node/)
+  * 노드에 레이블 붙이기
+    * 예시) `$ kubectl label nodes kubernetes-foo-node-1.c.a-robinson.internal disktype=ssd`
+  * 파드에 node selector 추가하기
+    ~~~
+    spec:
+      container:
+      nodeSelector:
+        disktype: ssd
+    ~~~
+* `Node Affinity`
+  * Node Selector는 선택에 대한 요구사항을 이야기하는 사전 조건
+  * 복잡한 선택에는 Affinity가 유연
+    * 예시) 레이블 foo이면 A 또는 B 노드를 선택
+      ~~~yaml
+      kind:	Pod
+      ...
+      spec:
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                # foo == A or B
+                - key: foo
+                  operator: In
+                  values:
+                  - A
+                  - B
+      ~~~
+    * 예시) A, B 둘다 가능하지만 A로 라벨링 된 노드를 더 선호
+      ~~~yaml
+      kind:	Pod
+      ...
+      spec:
+        affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            # foo == A or B
+            - key: foo
+              operator: In
+              values:
+              - A
+              - B
+        preferredDuringSchedulingIgnoredDuringExecution:
+          preference:
+          - weight: 1
+            matchExpressions:
+            # foo == A
+            - key: foo
+              operator: In
+              values:
+              - A
+      ~~~
+* `Taint/Toleration`
+  * Taint 
+    * 스케쥴러가 pod를 배치할 때 Taint (오염)되어 있는 node들은 배치하지 않도록 함
+  * Toleration
+    * Taint가 묻어 있어도 배치할 수 있도록 함
+  * Kubeadm은 설치 시, 자동으로 Controler Plane에 node-role.Kubernetes.io/master 테인트로 제어하여 일반 파드와 분리
+  * `$ kubectl describe node kjn-master-01`
+
+멀티 컨테이너 Pod
+* `Deployment`를 파일로 수정
+  * `Container`가 2번 들어가지 않으니 실수 주의
+* 두 개의 컨테이너가 한 개의 `emptydir` 볼륨을 바라보게 하기
+  * [볼륨 문서](https://kubernetes.io/docs/concepts/storage/volumes/)
+
+Namespace
+* 동일한 물리 클러스터를 기반으로 하는 여러 가상 클러스터(네임 스페이스)를 지원
+
+Label, Selector
+* 레이블은 파드와 같은 오브젝트에 첨부된 키와 값의 쌍
+  * 식별을 위해 사용되지만 코어에 특별한 의미는 없음
+
+Staticpod
+* `kubectl`, `control plane`에서 관리하지 않는 파드
+* `pod spec`을 디스크에 직접 쓸 수 있음
+* `kubelet`은 시작과 함께 바로 지정된 컨테이너 시작
+  * `kubelet`은 지속적으로 변경사항이 있는지 `Manifest` 파일을 지속적으로 모니터링
+* 컨피그 파일 확인
+  * `$ sudo cat /var/lib/kubelet/config.yaml`
+  * `volumeMounts` > `mountPath` > `/var/lib/etcd` 경로에 `etcd-data` 볼륨 저장 됨
+  * 특정 파일을 백업할 때 `etcd-data` 볼륨에 저장
+* K8S 클러스터 복구 방법
+  * 복구 하려면 사전에 백업받은 파일을 특정 경로에 위치 (`/var/lib/etcd2` 등)
+  * 해당 `kubelet config.yaml` 파일 수정해야 K8S 클러스터를 복구할 수 있음
+    * 스태틱 파드에 볼륨 마운트 설정을 위 백업 경로로 수정
+
+클러스터 노드 작업
+* `Cordon`
+  * 노드에 더이상 어떤 파드도 스케줄링 되지 않도록 하는 기능
+  * 예시) 오늘 야간에 정기점검이 잡혀있는 노드
+* `Drain`
+  * 노드에 있는 파드를 지금 바로 다른 노드로 이동시키는 기능
+  * `drain` 명령 입력 시 `cordon` 수행 후 `drain`을 하게 됨
+    * `cordon`이 조금 더 안정적
+  * 예시) 해당 노드에 고장이 발생, 파드를 다른 곳에서 새로 시작하는 경우
+* `Taint`
+  * 파드가 부적절한 노드에 실행하지 않도록 설정하는 기능
+  * 예시) `Toleration`과 결합하여 특정 파드만 실행시키고 싶은 경우 (`Control Plane`으로 사용하는 `Master Node`)
+
+클러스터 업그레이드
+* `kubelet`과 `kubeadm` 자체는 `kubeadm`으로 관리되지 않기에, OS 패키지 관리자인 `apt/yum`으로 설치 필요
+* 순서
+  * 컨트롤 플레인 1번 마스터 노드 먼저 업그레이드
+  * 2/3번 마스터 업그레이드
+  * 워커 노드 업그레이드 수행
+* 참고
+  * 업그레이드 시, `kubectl cordon/drain` 활용하여 사용자 워크로드를 조정해야 함
+  * 업그레이드 완료 후, `uncordon`하여 다시 파드가 스케줄링 되도록 설정
