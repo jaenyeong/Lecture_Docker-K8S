@@ -601,3 +601,54 @@ Staticpod
 * 참고
   * 업그레이드 시, `kubectl cordon/drain` 활용하여 사용자 워크로드를 조정해야 함
   * 업그레이드 완료 후, `uncordon`하여 다시 파드가 스케줄링 되도록 설정
+
+## Chapter06
+
+Storage
+* 데이터 저장소
+* 스토리지 종류
+  * DAS
+    * Direct Attached Storage - 직접
+  * NAS
+    * Network Attached Storage - LAN
+  * SAN
+    * Storage Area Network - Fiber chanel switch
+  * 가격
+    * DAS -> NAS -> SAN
+  * 성능
+    * NAS -> DAS = SAN
+  * 확장성
+    * DAS -> SAN -> NAS
+* RAID
+  * 0
+    * 구매한 그대로 사용
+  * 1
+    * 구매한 절반만 사용
+  * 5
+    * 패리티비트를 이용해 데이터 복구, 2개 이상 고장시 복구 불가
+
+Volumes
+* 하나의 파일 시스템을 갖춘 하나의 접근 가능한 스토리지 영역
+  * `$ sudo fdisk -l`
+    * 디스크 파티션을 CRUD 할 수 있는 유틸리티 명령
+  * `$ sudo cat /etc/fstab`
+    * `fstab`은 파일 시스템 정보, 부팅 시 마운트 정보를 보관하는 파일
+
+Persistent Volume
+* PV (Persistent Volume)
+  * 관리자가 프로비저닝하거나 스토리지 클래스를 사용하여 동적으로 프로비저닝한 클러스터의 스토리지
+* PVC (Persistent Volume Claim)
+  * 사용자의 스토리지에 대한 요청 (파드와 비슷)
+  * 파드
+    * 노드 리소스를 사용
+    * 파드 명세서 내 특정 수준의 리소스 (CPU, 메모리) 요청
+  * PVC
+    * PV 리소스를 사용
+    * 클레임 명세서 내 특정 크기 및 접근 모드를 요청
+* [볼륨 문서](https://kubernetes.io/ko/docs/concepts/storage/volumes/)
+
+ConfigMap
+* 키-값 쌍으로 기밀이 아닌 데이터를 `저장`하는데 사용하는 API 오브젝트
+* 컨테이너에 필요한 환경 설정 내용을 컨테이너 내부가 아닌 외부에 분리하는데 사용
+* 클러스터가 구성된 `config` 방식을 이해하는데 활용 가능하고 클러스터를 업그레이드 할 때도 활용 가능
+* [문서](https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/)
