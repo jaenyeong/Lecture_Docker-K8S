@@ -685,3 +685,47 @@ Ingress
   * 선택적 호스트
   * 경로 목록
   * 백엔드
+
+## Chapter08
+
+Logging & TroubleShooting
+* SRE (Site Reliability Engineering)
+  * IT 운영에 대한 접근 방식
+  * 소프트웨어 공학의 관점들을 통합한 원칙으로, 이들을 인프라스트럭처와 운영 문제에 적용
+    * 주된 목적은 상당한 스케일링이 가능하고 상당히 신뢰할만한 소프트웨어 시스템을 만드는 것
+* 개발자와 운영자는 추구하는 가치가 다름
+  * SRE는 DevOps를 구현
+    * DevOps는 IT의 Silo, Ops, Network, Security 등을 허무는 방식, 가이드라인, 문화의 집합
+    * SRE는 그동안 찾은 작업 방식, 이러한 사례로 구체화하는 신념, 그리고 역할에 대한 집합
+* 메트릭&모니터링 / 용량관리 / 변화관리 / 긴급대응 / 문화
+  * 메트릭&모니터링
+    * 모니터링 지표를 정의, 정의된 지표를 모니터링 시스템으로 구성
+    * 인사이트를 통해 시스템이 안정적인 상황과 또는 장애가 나는 지표는 무엇인지, 이유는 무엇인지, 어떻게 해결할지를 고민
+    * 기본적으로 SRE에서 가장 중요한 부분은 모든 것을 데이터화하고, 이 데이터를 기반으로 의사결정 하는 것
+  * 모니터링(Monitoring)
+    * 쿼리 카운트와 종류, 에러 카운트와 종류, 프로세싱 타임, 서버의 라이프타임과 같은 수치를 실시간으로 수집/처리/집계/보여줌
+  * 메트릭(Metric)
+    * 특정 시스템에서 리소스, 응용 프로그램 작업 또는 비즈니스 특성이 특정 시점에서의 수치로 표현되는 것 (수치화)
+    * 보통 키-밸류(key-value) 형태로 수집된 숫자가 일반적
+  * 로깅(Logging)
+    * 로깅은 메트릭보다 훨씬 많은 데이터를 포함하는 시스템이나 애플리케이션의 이벤트로 나타나며, 이러한 이벤트에 의해 생성되는 모든 정보를 포함
+  * 트레이스(Tracing)
+    * 특정 고유한 식별자가 모든 시스템에 걸쳐 전체 수명 주기 동안 추적될 수 있도록 제공하는 로깅의 특별한 경우
+* 쿠버네티스에서 로깅
+  * [문서](https://kubernetes.io/ko/docs/concepts/cluster-administration/logging/)
+* 로깅 아키텍처
+  * 노드 레벨
+  * 클러스터 레벨
+  * 로깅 에이전트와 함께 사이드카 컨테이너 사용
+  * 로깅 에이전트가 있는 사이드카 컨테이너
+  * 앱에서 직접 로그 노출
+
+백업 및 복구
+* 쿠버네티스 클러스터의 정보들을 갖고 있는 `etcd`
+  * `etcd` 문제 발생 시 K8S 클러스터 전체가 영향을 받음
+* Pod로 구동된 `etcd` 버전 확인 후 해당 `etcdctl` 설치
+  * [etcd 문서](https://github.com/etcd-io/etcd/releases)
+  * `$ kubectl describe -n kube-system pod etcd-kjn-master-01.kr-central-1.c.internal`
+
+## Kubectl Docker secret
+* `$ kubectl create secret docker-registry dockersecret --docker-username="" --docker-password="" --docker-server=https://index.docker.io/v1/ --dry-run=client -o yaml > dockersecret.yaml`
