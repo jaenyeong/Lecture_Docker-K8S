@@ -652,3 +652,36 @@ ConfigMap
 * 컨테이너에 필요한 환경 설정 내용을 컨테이너 내부가 아닌 외부에 분리하는데 사용
 * 클러스터가 구성된 `config` 방식을 이해하는데 활용 가능하고 클러스터를 업그레이드 할 때도 활용 가능
 * [문서](https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/)
+
+## Chapter07
+
+Service
+* 여러 레플리카에 트래픽을 분산시키는 로드 밸런서 (TCP, UDP 모두 가능)
+* 노드의 `kube-proxy`를 활용, 엔드포인트로 라우팅 되도록 처리
+  * `kube-proxy`가 직접 `UserSpace Proxy` 역할 시
+    * 서비스(`kube-proxy`)가 요청을 직접 네비게이션
+    * 모든 파드의 요청이 서비스에게 전달됨
+  * `kube-proxy`가 `iptables`를 통해 `netfilter` 조작하는 역할 시
+    * `iptable`가 리눅스 커널 내 반영되어 파드의 요청을 `netfilter` 모듈을 통해 네비게이션
+    * 서비스(`kube-proxy`)는 `iptables` 내용을 커널에 반영
+
+DNS (`Domain Name System`)
+* 호스트의 도메인명을 호스트의 네트워크 주소로 변경 또는 반대로 변환을 수행
+* 공유기에서는 단말에 사설 IP를 할당하면서 DNS 주소도 배포 가능
+  * 공유기를 나쁜 목적으로 활용한다면 어떤 도메인이든 특정 IP 주소를 반환하게 할 수 있음
+* K8S에서는 `CoreDNS`라는 오픈 소스를 활용
+
+Ingress
+* 클러스터 내의 서비스에 대한 외부 접근을 관리하는 API 오브젝트
+  * 일반적으로 HTTP를 관리(로드 밸런싱)
+* 위에서 만든 `my-nginx`는 `ClusterIP` 서비스이기에 클러스터 내에서는 접속 가능하지만 외부에서는 접속 불가
+* Controller
+  * [인그레스 컨트롤러 문서](https://kubernetes.io/ko/docs/concepts/services-networking/ingress-controllers/)
+  * 앞서 생성한 `Ingress`는 단순히 로드밸런싱에 필요한 정보일 뿐, 실제 로드 밸런싱을 수행할 프로그램이 있어야 함(인그레스 컨트롤러)
+  * [nginx 인그레스 컨트롤러](https://kubernetes.github.io/ingress-nginx/deploy/)
+* 컨트롤러 추가
+  * `$ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v0.48.1/deploy/static/provider/baremetal/deploy.yaml`
+* Rule
+  * 선택적 호스트
+  * 경로 목록
+  * 백엔드
