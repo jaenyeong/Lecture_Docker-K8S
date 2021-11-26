@@ -58,7 +58,7 @@ TroubleShooting
   * `$ kubectl taint nodes kjn-worker-02.kr-central-1.c.internal node.kubernetes.io/unreachable:NoExecute-`
   * `$ kubectl taint nodes kjn-worker-02.kr-central-1.c.internal node.kubernetes.io/unreachable:NoSchedule-`
 * 워커 노드의 테인트를 해제해도 남아 있음
-  * `$ `
+  * `$ kubectl describe node kjn-worker-02.kr-central-1.c.internal`
     ~~~
     Name:               kjn-worker-02.kr-central-1.c.internal
     Roles:              <none>
