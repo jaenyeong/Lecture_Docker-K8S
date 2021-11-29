@@ -9,6 +9,7 @@
   * `$ ssh -i [pem file] [kakao instance address]`
 
 ## Chapter01
+ 
 OT & Setting
 * `kakao i cloud`
   * [Kakao i 접속](https://console.kakaoi.io/)
@@ -23,6 +24,7 @@ OT & Setting
   * `kjn-worker02` - `172.30.7.0`
 
 ## Chapter02
+ 
 IT Infra & K8S 배경지식
 * 기본용어
   * CPU
@@ -97,6 +99,7 @@ IT Infra & K8S 배경지식
   * 암호, OAuth 토큰 및 SSH 키와 같은 중요한 정보를 저장하고 관리 가능
 
 ## Chapter03
+
 K8S 아키텍처
 * 설계 사상
   * 선언적 구성
