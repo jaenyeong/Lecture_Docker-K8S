@@ -267,3 +267,247 @@ Init Container
     * 모든 컨테이너에는 CPU, 메모리에 대한 최소 요구사항, 제한 설정 필요
   * 리소스 조회
     * `# kubectl describe resourcequota -n ${네임스페이스}`
+
+## Chapter02
+
+### 쿠버네티스 저장소 활용과 롤링 업데이트
+
+`Volume` 개요
+* 볼륨(Volume)
+  * 컨테이너가 외부 스토리지에 액세스하고 공유하는 방법
+  * 파드의 각 컨테이너에는 고유의 분리된 파일 시스템이 존재
+  * 볼륨은 파드의 컴포넌트이며 파드 스펙에 의해 정의
+  * 독립적인 쿠버네티스 오브젝트가 아니기 때문에 스스로 생성 및 삭제 불가능
+  * 각 컨테이너의 파일 시스템의 볼륨을 마운트하여 생성
+* 종류
+  * 임시 볼륨
+    * `emptyDir`
+      * 파일 시스템 공유하는 것처럼 구성
+  * 로컬 볼륨
+    * `hostpath`
+      * 마스터 노드의 핵심 컴포넌트가 사용함 (`API`, `스케줄러`, `etcd` 등)
+      * 모니터링 용도로 사용 (`/var/log`)
+    * local
+  * 네트워크 볼륨 (온프레미스)
+    * `iSCSI`
+    * `NFS`
+    * `cepthFS`
+    * `glusterFS`
+  * 네트워크 볼륨 (클라우드 종속)
+    * `gcePersistentDisk`
+    * `awsEBS`
+    * `azureFile`
+* 주요 사용 가능한 볼륨 유형
+  * `emptyDir`
+    * 일시적인 데이터 저장, 비어있는 디렉터리
+  * `hostpath`
+    * 호스트 노드의 파일 시스템에서 파일이나 디렉터리를 마운트
+  * `NFS`
+    * 기존 NFS(`Network File System`) 공유가 파드에 장착
+  * `gcePersistentDisk`
+    * `GCE (Google Compute Engine)` 영구디스크 마운트
+  * `persistentVolumeClaim`
+    * 사용자가 특정 클라우드 환경에 세부 사항을 모른 채 GCE
+  * `configMap`, `Secret`, `downwardAPI`
+    * 특수 유형의 볼륨
+* [persistentvolumeclaim 문서](https://kubernetes.io/ko/docs/concepts/storage/volumes/#persistentvolumeclaim)
+
+`Secrets`, `Configmap` mount
+* `ConfigMap` 마운트
+  * 키-값 쌍으로 기밀이 아닌 일반 데이터를 저장하는데 사용하는 API 오브젝트
+  * 파드는 볼륨에서 `환경 변수`, `커맨드-라인 인수` 또는 `구성 파일`로 컨피그맵을 사용
+  * 컨피그맵 사용 시 컨테이너 이미지에서 환경별 구성을 분리, 앱을 쉽게 이식 가능
+* `Secret` 마운트
+  * 암호, 토큰 또는 키와 같은 소량의 중요한 데이터를 포함하는 오브젝트
+  * 시크릿을 사용해 사용자 기밀 데이터를 앱 코드에 넣을 필요가 없음
+
+`NFS`를 활용한 `Network Storage`
+* `NFS` (`Network File System`)
+  * 쿠버네티스에서 사용하는 프로토콜이나 쿠버네티스의 종속된 개념이 아님
+  * 네트워크 환경 볼륨을 마운트할 수 있음 (NFS가 구성되어 있어야 함)
+
+`PV`와 `PVC`
+* `PV`는 클러스터 스토리지 (볼륨 그 자체)
+  * `PV`는 네임스페이스에 속하지 않음
+  * 관리자가 프로비저닝하거나 `StorageClass`를 사용하여 동적으로 프로비저닝한 클러스터의 스토리지
+* `PVC`는 사용자가 `PV`에게 하는 요청
+  * 사용자의 스토리지에 대한 요청 (`PV` 리소스 사용)
+* 파드 개발자는 클러스터에서 네트워크 스토리지를 사용하려면 인프라를 잘 알아야 함
+  * 앱을 배포하는 개발자가 스토리지 기술의 종류를 몰라도 상관없도록 하는 것이 이상적
+  * 인프라 관련 처리는 클러스터 관리자의 유일한 도메인
+* `PV`, `PVC`를 사용해 관리자와 사용자의 영역을 나눔
+  * 인프라 세부 사항을 알지 못해도 클러스터의 스토리지를 사용할 수 있도록 제공하는 서비스
+  * 파드 안에 영구 볼륨을 사용하도록 하는 방법은 다소 복잡함
+* `mongo-pvc.yaml`
+  ~~~yaml
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: mongodb-pvc
+  spec:
+    resources:
+      requests:
+        storage: 1Gi
+    accessModes:
+    - ReadWriteOnce
+    storageClassName: ""
+  ~~~
+  * `mongodb-pvc`
+    * 클레임 사용 시 필요함
+  * `storage`
+    * 요청할 스토리지 크기
+  * `-ReadWriteOnce`
+    * 접근 권한, 단일 클라이언트에 읽기/쓰기 지원
+  * `storageClassName`
+    * 동적 프로비저닝에서 사용
+    * 작성은 해야 하나 값은 비워둬야 함 (작성하지 않으면 디폴트로 다른 값이 설정됨)
+* `mongo-pv.yaml`
+  ~~~yaml
+  apiVersion: v1
+  kind: PersistentVolume
+  metadata:
+    name: mongodb-pv
+  spec:
+    capacity:
+      storage: 1Gi
+    accessModes:
+    - ReadWriteOnce
+    - ReadOnlyMany
+    persistentVolumeReclaimPolicy: Retain
+    gcePersistentDisk:
+      pdName: mongodb
+      fsType: ext4
+  ~~~
+  * `persistentVolumeReclaimPolicy`
+    * `Retain`
+      * `PVC` 삭제 시 `PV`는 여전히 존재, 볼륨은 해제된 것으로 간주(취급)함
+      * 연관된 스토리지 자산의 데이터를 수동으로 정리
+    * `Delete`
+      * 외부 인프라의 연관된 스토리지 자산을 모두 삭제
+    * `Recycle`
+      * `rm -rf /thevolume/*` 볼륨에 대한 기본 스크럽을 수행
+      * 새 클레임에 대해 다시 사용할 수 있도록 함
+    * 특수한 경우가 아니라면 `Retain` 보다 `Delete`를 사용해 완전히 삭제할 것
+      * 많은 곳에서 공간을 공유하기 때문에 공간 확보 필요
+    * 설정은 생성 후에도 재설정 가능
+
+`StorageClass`
+* 위 작업들을 자동으로 처리
+  * 관리자가 제공하는 스토리지의 `classes`를 설명할 수 있는 방법을 제공
+* `PV`를 직접 만드는 대신 사용자가 원하는 `PV` 유형을 선택하도록 하는 오브젝트 정의 기능
+  * `PV`를 처리하는 주체가 사람에서 시스템으로 변환
+* `PVC` 파일 제작
+  * 파드와 `PVC` 모두 삭제 후 다시 업로드 (`apply` 명령 시 권한 에러 발생)
+  * 위 `mongo-pvc.yaml` 파일 내용 변경
+    * `storageClassName`의 값을 `""`에서 `storage-class`로 수정 (`PV` 동적 프로비저닝)
+    * `PV` 동적 프로비저닝을 사용하면 사용할 디스크와 `PV`가 자동으로 생성됨
+* 이대로는 `StorageClass`가 동작하지 않음 (`CSI`를 구성해야 함)
+  * `CSI(Container Storage Interface)`는 디스크를 생성, 할당, 분배해 줌 (중개)
+
+`rook-ceph`를 활용한 `Private Cloud StorageClass`
+* `rook-ceph`
+  * 오픈소스 클라우드 네이티브 스토리지 오케스트레이터
+  * 온프레미스 환경에서 `storage-class`를 구성하는 도구
+  * `ceph`은 파일 스토리지를 가상화시키는 클러스터를 구성할 수 있는 소프트웨어
+  * `rook` 패키지 활용하면 K8S에서 보다 편리하게 `ceph`을 설치, 관리 가능
+    * 물론 직접 설치도 가능
+
+`StatefulSet`
+* 앱의 상태(`stateful`)를 저장하고 관리하는 데 사용되는 K8S 객체(워크로드 API 오브젝트)
+* 스테이트풀셋으로 생성되는 파드는 영구 식별자(파드 일련 번호)를 가지고 상태(ID, 디스크 등) 유지
+  * 디플로이먼트는 파드를 삭제, 생성 시 상태가 유지되지 않는 한계가 존재
+* 파드 집합의 디플로이먼트와 스케일링을 관리하며, 파드들의 순서 및 고유성을 보장
+* 사용하는 경우
+  * 안정적이고 고유한 네트워크 식별자가 필요한 경우 사용
+  * 안정적이며 지속적인 스토리지
+  * 질서 정연한 배치 및 확장
+  * 주문, 자동 롤링 업데이트
+* 문제점
+  * 스테이트풀셋과 관련된 볼륨(파드마다 구성된 디스크)이 삭제되지 않음
+  * 파드의 스토리지는 `PV`나 `StorageClass`로 프로비저닝 수행해야 함
+  * 롤링업데이트를 수행하는 경우 수동으로 복구해야 할 수 있음
+  * 파드 네트워크 ID를 유지하기 위해 헤드레스(`headless`) 서비스 필요
+    * 파드를 직접 지정하기 때문에 서비스의 ID는 필요없지만 DNS를 만들기 위해 서비스가 필요
+* 헤드레스(`headless`) 서비스는 `clusterIP`를 `None`으로 지정하여 생성
+  * 헤드레스 서비스는 IP가 할당되지 않음
+  * `kube-proxy`가 밸런싱이나 프록시 형태로 동작하지 않음 (파드를 직접 지정하면 되기 때문에 기능이 필요하지 않음)
+    * 보통 서비스의 역할을 `kube-proxy`가 `IP-tables`, `netfilter` 등을 통해 추상화하지만 스테이트풀셋에서는 해주지 않음
+  * 파드의 이름은 도메인명의 요소로 사용됨
+  * 헤드레스 서비스는 실제로 서비스의 역할을 하지 않고 이름만 빌려줌
+* 다수 파드 식별 요령
+  * 스테이트풀셋으로 다수의 파드 생성이 가능
+  * 하지만 스테이트풀셋은 상태를 유지하는 파드, 각각의 파드를 인식할 수 있는 방법을 알아야 함
+  * 이를 통해 안정적인 네트워크 ID와 스토리지를 식별할 수 있음
+  * 순차적으로 하나씩 배포하는데 앞의 파드가 준비 완료 상태가 된 후에 다음 파드 생성
+  * 배포 순서는 `0`번째부터 `n-1`까지 (종료 순서는 역순)
+* 업데이트 전략
+  * `OnDelete`
+    * 파드를 자동으로 업데이트하는 기능이 아님
+    * 수동으로 삭제하면 스테이트풀셋의 `spec.template`를 적용한 새로운 파드가 생성됨
+  * `RollingUpdate`
+    * 한번에 하나씩 파드를 업데이트 함
+    * `web-{n-1}`부터 `web-0` 순서(배포 역순)로 진행
+
+`Deployment`
+* 앱 다운타임 없이 업데이트 가능하도록 도와주는 리소스
+* 레플리카셋(`replicaSet`), 레플리케이션컨트롤러(`replicationController`) 상위에 배포되는 리소스
+  * 현재 레플리케이션컨트롤러는 잘 사용되지 않음
+* 모든 파드 업데이트
+  * 잠깐의 다운타임 발생
+    * 새 파드를 실행, 작업이 완료되면 오래된 파드 삭제
+  * 롤링 업데이트
+* 작성 요령
+  * `pod.yaml`의 `metadata`와 `spec` 부분을 그대로 옮김
+  * `deployment.yaml`
+    * `spec.template`
+      * 배포할 파드 설정
+    * `replicas`
+      * 배포할 파드의 수를 명시
+    * `label`
+      * 디플로이먼트가 배포한 파드를 관리
+  * 스케일링
+    * `# kubectl edit deploy ${deployName}`
+      * `yaml`파일을 직접 수정, `replicas` 조정
+    * `# kubectl scale deploy ${deployName} --replicas=${number}`
+      * `replicas` 조정
+
+앱 롤링 업데이트와 롤백
+* 새 파드를 실행, 작업이 완료되면 오래된 파드 삭제 (잠깐의 다운타임 발생)
+  * 새 버전을 실행하는 동안 오래된 버전 파드와 연결
+  * 서비스의 레이블셀렉터(`label selector`)를 수정하여 간단하게 수정 가능
+* 레플리케이션컨트롤러가 제공하는 롤링 업데이트
+  * 예전에는 `kubectl`을 사용해 스케일링을 사용하여 수동으로 롤링 업데이트 진행
+    * `kubectl` 중단 시 업데이트는?
+  * 레플리케이션컨트롤러 또는 레플리카셋을 통제할 수 있는 시스템(디플로이먼트)이 필요함
+* 업데이트 전략 (`StrategyType`)
+  * `Rolling Update`
+    * 오래된 파드를 하나씩 제거하는 동시에 새로운 파드 추가
+    * 요청을 처리할 수 있는 수는 그대로 유지
+    * 반드시 이전 버전과 새 버전을 동시에 처리 가능하도록 설계한 경우에만 사용할 것
+  * `Recreate`
+    * 새 파드 생성 전에 이전 파드 모두 삭제
+    * 여러 버전을 동시에 실행(서비스) 불가능
+    * 잠깐의 다운타임 존재
+  * 세부 설정
+    * `maxSurge`
+      * 기본값 `25%`, 개수로도 설정 가능
+      * 최대로 추가 배포를 허용할 개수 설정
+      * 4개인 경우 `25%`이면 1개가 설정됨
+        * 총 5개까지 동시 파드 운영
+    * `maxUnavailable`
+      * 기본값 `25%`, 개수로도 설정 가능
+      * 동작하지 않는 파드의 수 설정 (덜 운영해도 되는 수 설정)
+      * 4개인 경우 `25%`이면 1개가 설정됨
+        * 총 3(4-1)개는 운영해야 함
+* 업데이트를 실패하는 경우
+  * 부족한 할당량 (`Insufficient quota`)
+  * 레디네스 프로브 실패 (`Readiness probe failures`)
+  * 이미지 가져오기 에러 (`Image pull erros`)
+  * 부족한 권한 (`Insufficient permissions`)
+  * 제한 범위 (`Limit ranges`)
+  * 앱 런타임 구성 에러 (`Application runtime misconfiguration`)
+* 기본적으로 업데이트 실패 시 `600`초 후 업데이트를 중지
+  ~~~yaml
+  spec:
+    processDeadlineSeconds: 600
+  ~~~
