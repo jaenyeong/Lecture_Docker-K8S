@@ -511,3 +511,199 @@ Init Container
   spec:
     processDeadlineSeconds: 600
   ~~~
+
+## Chapter03
+
+### 쿠버네티스 유저(권한) 관리
+
+K8S 인증 체계
+* 모든 통신은 `TLS`로 대부분의 엑세스는 `kube-apiserver`를 통해서만 통신해야 함
+* 엑세스 가능한 유저
+  * `X509 Client Certs`
+    * `X509`는 인증서 형식
+    * `kubeadm`로 구성 시 `kube config` 안에서 복제 했던 키를 사용(인증)하여 통신하는 방식
+  * `Static Token File`
+    * 인증 방식 중 가장 쉬운 편에 속함
+    * 관리자가 생성한 토큰(파일)으로 통신 (적용 시 리부팅 필요)
+    * 권장되는 방식은 아님
+  * `Putting a Bearer Token in a Request`
+    * 베어러 토큰을 사용해 통신
+  * `Bootstrap Tokens`
+    * `kubeadm` 구성 시 `init` 후에 `join` 시 필요한 부트스트랩 토큰 > 클러스터 참여 여부 결정
+  * `Service Account Tokens`
+    * 파드가 사용하는 앱 전용 토큰
+  * `OpenID Connect Tokens`
+    * `Azure Active Directory`
+    * `Salesforce`
+    * `Google` - (`GCP GKE`)
+    * 기타
+* 무엇을 할 수 있는가?
+  * `RBAC Authorization` (`Role-Based Access Control`)
+    * 역할 기반 엑세스 제어
+    * 조직 내의 개별 사용자의 역할에 따라 컴퓨터 또는 네트워크 리소스에 대한 액세스 규제
+    * 일반적으로 자주 사용되는 방식
+  * `ABAC Authorization` (`Attribute-Based Access Control`)
+    * 속성 기반 엑세스 제어
+    * 속성을 결합하는 정책을 사용하여 사용자에게 엑세스 권한 부여
+    * 복잡성 등을 고려했을 때 자주 사용되지 않음
+  * `Node Authorization`
+    * `kubelets`에서 만든 API 요청을 특별히 승인하는 특수 목적 권한 부여 모드
+  * `WebHook Mode`
+    * `HTTP` 콜백, 특정 이벤트 발생 시 `URL`에 메시지 전달
+
+`User Account`, `Service Account`
+* `User Account`
+  * 일반 사용자를 위한 계정
+* `Service Account`
+  * 앱(파드)을 위한 계정
+* `Static Token File`
+  * `apiserver` 서비스 실행 시 `--token-auth-file=${SOMEFILE}`
+    * `kube-apiserver` 수정 필요
+    * `SOMEFILE` 확장자는 `csv`
+  * API 서버를 리부팅해야 적용됨
+  * `SOMEFILE`은 토큰, 사용자명, 사용자 `uid`, 그룹명(옵션)으로 구성된 최소 3열의 `csv` 파일
+    * 예시 `token,user,uid,"group1,group2,group3"`
+  * 적용 시 사용 방법
+    * `HTTP` 요청 진행 시 아래 내용을 헤더에 포함
+      * `Authorization: Bearer 31ada4fd-adec-460c-809a-9e56ceb75269`
+    * `kubectl`에 등록해 사용하는 방법
+      * `# kubectl config set-credentials user1 --token=password1`
+      * `# kubectl config set-context user1-context --cluster=kubernetes --namespace=frontend --user=user1`
+      * `# kubectl get pod --user user1`
+* 서비스 어카운트
+  * 직접 생성하지 않아도 `default` 서비스 어카운트가 생성됨
+    * 파드에 서비스 어카운트 설정을 직접하지 않으면 `default` 서비스 어카운트를 사용하게 됨
+  * 생성 시 시크릿(토큰)이 같이 생성됨
+  * 일반적으로 별도의 권한을 부여하고 싶은 경우 `default`를 사용하기보다는 새로 생성하길 권장
+
+`TLS` 인증서를 활용한 통신 이해
+* 응용 계층인 `HTTP`와 `TCP` 계층 사이에서 작동
+  * 앱에 독립적 -> `HTTP` 제어를 통한 유연성
+  * 데이터의 암호화, 데이터 무결성, 서버 인증 기능, 클라이언트 인증 기능
+* `CA`를 통해 `Certificate` 보장
+* K8S에서 인증서 위치
+  * `/etc/kubernetes/pki`
+* 정확한 `TLS` 인증서 사용 확인
+  * `manifests` 파일에서 실행하는 `certificate` 확인 필요
+* 인증서 정보 확인
+  * `# openssl x509 -in ${certificate} -text`
+* 유효기간 확인
+  * `# kubeadm certs check-expiration`
+* `Automatic certificate renewal`
+    * `kubeadm`은 컨트롤 플레인 업그레이드 시 모든 인증서를 자동 갱신
+* `Manual certificate renewal`
+  * `kubeadm certs renew all`
+
+`TLS` 인증서를 활용한 유저 생성
+* [1번 방법] `ca`를 사용하여 직접 `csr` 승인 (`certificate signing request`)
+  * 개인키 생성
+    * `# openssl genrsa -out kjn.key 2048`
+  * 개인(`private`) 키를 기반으로 인증서 서명 요청 (`csr` 생성)
+    * `# openssl req -new -key kjn.key -out kjn.csr -subj "/CN=kjn/0=boanproject"`
+      * `CN` 사용자명
+      * `O` 그룹명
+      * `CA`에게 `csr` 파일로 인증 요청 가능
+  * K8S 클러스터 인증 기관(`CA`)이 사용 요청을 승인해야 함
+    * 내부에서 직접 승인 시 `pki` 경로에 있는 `ca.key`, `ca.crt`를 통해 승인 가능
+    * `kjn.csr`을 승인하여 최종 인증서인 `kjn.crt` 생성
+    * `-days` 옵션으로 인증서의 유효 기간 설정 (여기서는 500일)
+      * `# openssl x509 -req -in kjn.csr -CA /etc/kubernetes/pki/ca.crt -CAkey /etc/kubernetes/pki/ca.key -CAcreateserial -out kjn.crt -days 500`
+        * `CAcreateserial` 옵션을 주지 않으면 생성되지 않음
+* [2번 방법] K8S에 `crt`를 등록
+  * `crt` 사용을 위해 `kubectl` 명령으로 등록
+    * `# kubectl config set-credentials kjn --client-certificate=.certs/kjn.crt --client-key=.certs/kjn.key`
+    * `# kubectl config set-context kjn-context --cluster=kubernetes --namespace=office --user=kjn`
+  * 다음 명령으로 사용자 권한으로 실행 가능 (지금은 사용자에게 권한을 할당하지 않아 실행 안됨)
+    * `# kubectl --context=kjn-context get pods`
+
+`kube config` 파일을 사용한 인증
+* `kube config`
+  * 파일 경로
+    * `~/.kube/config`
+  * 구성
+    * `clusters`
+      * 연결할 K8S 클러스터의 정보
+    * `users`
+      * 사용할 권한을 가진 사용
+    * `contexts`
+      * `cluster`, `user`를 함께 입력해 권한 할당
+* `# kubectl config view`
+  ~~~yaml
+  apiVersion: v1
+  clusters:
+  - cluster:
+      certificate-authority-data: DATA+OMITTED
+      server: https://172.30.5.70:6443
+    name: kubernetes
+  contexts:
+  - context:
+      cluster: kubernetes
+      namespace: dev1
+      user: john
+    name: john@kubernetes
+  - context:
+      cluster: kubernetes
+      namespace: office
+      user: kjn
+    name: kjn@kubernetes
+  - context:
+      cluster: kubernetes
+      user: kubernetes-admin
+    name: kubernetes-admin@kubernetes
+  - context:
+      cluster: kubernetes
+      namespace: frontend
+      user: user1
+    name: user1-context
+  current-context: kubernetes-admin@kubernetes
+  kind: Config
+  preferences: {}
+  users:
+  - name: john
+    user:
+      client-certificate: /root/john.crt
+      client-key: /root/john.key
+  - name: kjn
+    user:
+      client-certificate: /root/kjn.crt
+      client-key: /root/kjn.key
+  - name: kubernetes-admin
+    user:
+      client-certificate-data: REDACTED
+      client-key-data: REDACTED
+  - name: user1
+    user:
+      token: REDACTED
+  ~~~
+  * `cluster` 주요 정보
+    * `certificate-authority-data: DATA+OMITTED`
+    * `server: https://172.30.5.70:6443`
+  * `contexts` 주요 정보
+    * `cluster`, `user` 정보를 하나의 컨텍스트로 묶음
+  * `current-context` 현재 사용하는 컨텍스트 정보
+  * `users` 주요 정보
+    * `client-certificate-data` 등은 데이터 직접 삽입뿐 아니라 파일 경로 명시 가능
+* 인증 사용자 변경
+  * `# kubectl config use-context user@kube-cluster`
+
+`RBAC` 기반 권한 관리
+* 역할 기반 액세스 제어 (`Role-Based Access Control`)
+  * 기업 내 개별 사용자의 역할을 기반으로 컴퓨터, 네트워크 리소스에 대한 엑세스 제어
+  * `rabc.authorization.k8s.io API`를 사용하여 정의
+  * 권한 결정을 내리고 관리자가 `Kubernetes API`를 통해 정책을 동적으로 구성
+  * `RBAC`를 사용하여 룰을 정의하려면 `apiserver`에 `--authorization-mode=RBAC` 옵션 필요
+* `RBAC`를 다루는 API는 4가지의 리소스 컨트롤
+  * `Role`
+  * `RoleBinding`
+  * `ClusterRole`
+  * `ClusterRoleBinding`
+* `Role`, `RoleBinding` 차이
+  * `Role`
+    * `누가하는 것인지`를 정의하지 않고 `롤`만을 정의
+    * 일반롤은 네임스페이스 단위로 역할을 관리
+    * 클러스터롤은 네임스페이스의 상관없이 전체 클러스터에서 특정 자원을 관리할 롤을 정의
+  * `RoleBinding`
+    * `누가하는 것인지`만을 정의하고 `롤`은 정의하지 않음
+    * 롤을 정의하는 대신, 참조할 롤을 정의 (`roleRef`)
+    * 어떤 사용자에게 어떤 권한을 부여할 지 정하는 바인딩 리소스
+    * 일반롤에는 롤바인딩, 클러스터롤에는 클러스터롤바인딩이 필요함
